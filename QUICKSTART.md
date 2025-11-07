@@ -278,7 +278,7 @@ sudo ./scripts/start_node1.sh      # With sudo if needed
 hostname -I                        # Get IP address
 ps aux | grep python               # Check running processes
 sudo systemctl status bluetooth    # Check Bluetooth
-iwconfig                          # Check WiFi
+iw dev                            # Check WiFi
 ```
 
 ---

@@ -89,8 +89,9 @@ apt install -y python3-pip python3-venv python3-full \
 
 echo ""
 echo "Installing WiFi scanning tools..."
-apt install -y wireless-tools aircrack-ng iw net-tools \
-    wpasupplicant network-manager
+# Note: wireless-tools is deprecated in Ubuntu 25.10, using iw instead
+apt install -y aircrack-ng iw net-tools \
+    wpasupplicant network-manager rfkill
 
 echo ""
 echo "Installing Bluetooth tools..."

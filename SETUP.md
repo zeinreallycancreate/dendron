@@ -82,10 +82,11 @@ On your **first Raspberry Pi**:
    ```bash
    sudo apt update
    sudo apt install -y python3-pip python3-venv python3-full \
-       wireless-tools aircrack-ng iw net-tools \
+       aircrack-ng iw net-tools rfkill \
        bluetooth bluez bluez-tools \
        libpcap-dev libglib2.0-dev libbluetooth-dev
    ```
+   Note: `wireless-tools` (iwconfig/iwlist) is deprecated in Ubuntu 25.10. Using `iw` instead.
 
 4. **Start Node 1**:
    ```bash
@@ -346,10 +347,11 @@ System packages (install manually on Raspberry Pi with Ubuntu 25.10 ARM64):
 ```bash
 sudo apt update
 sudo apt install -y python3-pip python3-venv python3-full \
-    wireless-tools aircrack-ng iw net-tools \
+    aircrack-ng iw net-tools rfkill \
     bluetooth bluez bluez-tools \
     libpcap-dev libglib2.0-dev libbluetooth-dev
 ```
+Note: `wireless-tools` (iwconfig/iwlist) is deprecated in Ubuntu 25.10. Using `iw` instead.
 
 ## 🤝 Contributing
 

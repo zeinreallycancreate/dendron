@@ -86,23 +86,23 @@ class WiFiScanner:
             except Exception as e:
                 self.logger.debug(f"iw method failed: {e}")
             
-            # Method 2: Try using iwconfig (older approach, still works)
+            # Method 2: Try using ip commands (alternative approach)
             try:
-                subprocess.run(["sudo", "ifconfig", self.interface, "down"], 
+                subprocess.run(["sudo", "ip", "link", "set", self.interface, "down"], 
                              capture_output=True, timeout=5)
-                subprocess.run(["sudo", "iwconfig", self.interface, "mode", "monitor"], 
+                subprocess.run(["sudo", "iw", self.interface, "set", "type", "monitor"], 
                              capture_output=True, timeout=5)
-                subprocess.run(["sudo", "ifconfig", self.interface, "up"], 
+                subprocess.run(["sudo", "ip", "link", "set", self.interface, "up"], 
                              capture_output=True, timeout=5)
                 
                 # Verify it worked
-                result = subprocess.run(["iwconfig", self.interface],
+                result = subprocess.run(["iw", self.interface, "info"],
                                       capture_output=True, text=True, timeout=5)
-                if "Mode:Monitor" in result.stdout:
-                    self.logger.info(f"Monitor mode enabled on {self.interface} using iwconfig")
+                if "type monitor" in result.stdout:
+                    self.logger.info(f"Monitor mode enabled on {self.interface} using iw")
                     return True
             except Exception as e:
-                self.logger.debug(f"iwconfig method failed: {e}")
+                self.logger.debug(f"iw method (alternative) failed: {e}")
             
             # If we get here, monitor mode failed
             self.logger.warning("Monitor mode not available")
@@ -193,7 +193,7 @@ class WiFiScanner:
             return list(devices.values())
             
         except ImportError:
-            self.logger.warning("Scapy not available, using iwlist fallback")
+            self.logger.warning("Scapy not available, using iw fallback")
             return self._scan_wifi_managed_mode()
         except Exception as e:
             self.logger.error(f"WiFi scan failed: {e}")
@@ -202,11 +202,21 @@ class WiFiScanner:
             return self._scan_wifi_managed_mode()
     
     def _scan_wifi_managed_mode(self) -> List[Dict]:
-        """Fallback scanning using iwlist in managed mode"""
+        """Fallback scanning using iw in managed mode (replaces deprecated iwlist)"""
         try:
             import subprocess
+            
+            # Trigger scan
+            subprocess.run(
+                ["sudo", "iw", "dev", self.interface, "scan"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            # Get scan results
             result = subprocess.run(
-                ["sudo", "iwlist", self.interface, "scan"],
+                ["sudo", "iw", "dev", self.interface, "scan", "dump"],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -217,17 +227,22 @@ class WiFiScanner:
             
             for line in result.stdout.split('\n'):
                 line = line.strip()
-                if "Address:" in line:
+                
+                # BSS line contains MAC address
+                if line.startswith("BSS "):
                     if current_device:
                         devices.append(current_device)
-                    mac = line.split("Address: ")[1].strip()
+                    # Extract MAC address from "BSS aa:bb:cc:dd:ee:ff(on wlan0)"
+                    mac = line.split()[1].split('(')[0]
                     current_device = {'mac': mac, 'timestamp': time.time()}
-                elif "Signal level=" in line:
+                
+                # Signal strength line
+                elif line.startswith("signal:"):
                     # Extract signal strength
                     try:
-                        rssi_str = line.split("Signal level=")[1].split()[0]
-                        rssi = int(rssi_str.replace("dBm", ""))
-                        current_device['rssi'] = rssi
+                        rssi_str = line.split(":")[1].strip().split()[0]
+                        rssi = float(rssi_str)
+                        current_device['rssi'] = int(rssi)
                     except:
                         current_device['rssi'] = -100
                 elif "ESSID:" in line:

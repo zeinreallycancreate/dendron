@@ -139,7 +139,7 @@ Repeat same steps as Pi #1, but:
 ### No devices detected?
 ```bash
 # On each Raspberry Pi, check scanning:
-sudo iwlist wlan0 scan | grep -E "Cell|ESSID|Signal"
+sudo iw dev wlan0 scan | grep -E "BSS|SSID|signal"
 
 # Check Bluetooth:
 sudo hcitool scan

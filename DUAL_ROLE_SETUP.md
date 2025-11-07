@@ -276,7 +276,7 @@ sudo ./start_server_and_node.sh ../configs/node1_config.yml
 
 Check WiFi interface:
 ```bash
-iwconfig  # Should show wlan0 or similar
+iw dev  # Should show wlan0 or similar
 ```
 
 ## Performance Tips
