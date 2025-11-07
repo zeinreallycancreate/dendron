@@ -125,6 +125,22 @@
             opacity: 1;
         }
         
+        .uncertainty-area {
+            position: absolute;
+            border: 2px dashed rgba(255, 152, 0, 0.6);
+            background: rgba(255, 152, 0, 0.1);
+            pointer-events: none;
+            border-radius: 4px;
+        }
+        
+        .uncertainty-circle {
+            position: absolute;
+            border: 2px dashed rgba(255, 152, 0, 0.6);
+            background: rgba(255, 152, 0, 0.1);
+            pointer-events: none;
+            border-radius: 50%;
+        }
+        
         .node {
             position: absolute;
             width: 30px;
@@ -330,7 +346,35 @@
         
         .node-status-badge.inactive {
             background: #f44336;
-            color: white;
+            color: #white;
+        }
+        
+        .sidebar-section {
+            margin-bottom: 10px;
+        }
+        
+        .sidebar-section h3 {
+            font-size: 14px;
+            color: #667eea;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #667eea;
+            font-weight: bold;
+        }
+        
+        .device-name-toggle {
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+        
+        .device-name-toggle:hover {
+            color: #667eea;
+            transform: scale(1.05);
+        }
+        
+        .device-name-toggle:active {
+            transform: scale(0.95);
         }
         
         @media (max-width: 1024px) {
@@ -367,6 +411,10 @@
                             <div class="legend-icon node"></div>
                             <span>Scanner Node</span>
                         </div>
+                        <div class="legend-item">
+                            <div style="width: 20px; height: 12px; border: 2px dashed rgba(255, 152, 0, 0.6); background: rgba(255, 152, 0, 0.1);"></div>
+                            <span>Uncertainty Zone</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -387,19 +435,21 @@
                 
                 <div class="card">
                     <h2>Scanner Nodes</h2>
-                    <div class="node-list" id="node-list">
-                        <p style="text-align: center; color: #999; padding: 20px;">
-                            Waiting for nodes...
-                        </p>
+                    <div class="sidebar-section">
+                        <h3>Active Nodes</h3>
+                        <div class="node-list" id="node-list">
+                            <p style="text-align: center; color: #999; padding: 20px;">
+                                Waiting for nodes...
+                            </p>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="card">
-                    <h2>Detected Devices</h2>
-                    <div class="device-list" id="device-list">
-                        <p style="text-align: center; color: #999; padding: 20px;">
-                            Waiting for device data...
-                        </p>
+                    <div class="sidebar-section">
+                        <h3>Detected Devices</h3>
+                        <div class="device-list" id="device-list">
+                            <p style="text-align: center; color: #999; padding: 20px;">
+                                Waiting for device data...
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -418,6 +468,7 @@
         // Store devices and nodes
         let devices = {};
         let nodes = {};
+        let deviceNameStates = {};  // Track whether showing name or MAC for each device
         
         // Connect to server
         socket.on('connect', () => {
@@ -440,6 +491,7 @@
                     devicesData.devices.forEach(device => {
                         updateDevice({
                             mac: device.mac,
+                            name: device.name || 'Unknown',
                             type: device.type,
                             position: {
                                 x: device.x,
@@ -447,7 +499,8 @@
                                 z: device.z
                             },
                             confidence: device.confidence,
-                            timestamp: device.timestamp
+                            timestamp: device.timestamp,
+                            uncertainty_area: device.uncertainty_area || null
                         });
                     });
                 }
@@ -471,15 +524,32 @@
         function updateDevice(data) {
             devices[data.mac] = {
                 mac: data.mac,
+                name: data.name || 'Unknown',  // AI-generated name
                 type: data.type,
                 position: data.position,
                 confidence: data.confidence,
-                timestamp: data.timestamp
+                timestamp: data.timestamp,
+                uncertainty_area: data.uncertainty_area || null
             };
+            
+            // Initialize name state if not exists (default: show name)
+            if (!(data.mac in deviceNameStates)) {
+                deviceNameStates[data.mac] = 'name';
+            }
             
             renderDevices();
             renderDeviceList();
             updateStats();
+        }
+        
+        // Toggle between device name and MAC address
+        function toggleDeviceName(mac) {
+            if (deviceNameStates[mac] === 'name') {
+                deviceNameStates[mac] = 'mac';
+            } else {
+                deviceNameStates[mac] = 'name';
+            }
+            renderDeviceList();
         }
         
         // Update node
@@ -502,12 +572,20 @@
             const map = document.getElementById('map');
             const mapRect = map.getBoundingClientRect();
             
-            // Remove old devices
+            // Remove old devices and uncertainty areas
             const oldDevices = map.querySelectorAll('.device');
             oldDevices.forEach(d => d.remove());
+            const oldAreas = map.querySelectorAll('.uncertainty-area, .uncertainty-circle');
+            oldAreas.forEach(a => a.remove());
             
             // Add devices
             Object.values(devices).forEach(device => {
+                // Draw uncertainty area first (so it's behind the device marker)
+                if (device.uncertainty_area) {
+                    drawUncertaintyArea(device.uncertainty_area, mapRect);
+                }
+                
+                // Draw device marker
                 const x = (device.position.x / MAP_WIDTH) * mapRect.width;
                 const y = (device.position.y / MAP_HEIGHT) * mapRect.height;
                 
@@ -518,11 +596,54 @@
                 
                 const label = document.createElement('div');
                 label.className = 'device-label';
-                label.textContent = `${device.mac.substring(0, 8)}... (${Math.round(device.confidence * 100)}%)`;
+                const deviceName = devices[device.mac]?.name || 'Unknown';
+                label.textContent = `${deviceName} (${Math.round(device.confidence * 100)}%)`;
                 deviceEl.appendChild(label);
                 
                 map.appendChild(deviceEl);
             });
+        }
+        
+        // Draw uncertainty area on map
+        function drawUncertaintyArea(area, mapRect) {
+            const map = document.getElementById('map');
+            
+            if (area.type === 'rectangle') {
+                // Draw rectangular uncertainty zone
+                const minX = (area.min_x / MAP_WIDTH) * mapRect.width;
+                const maxX = (area.max_x / MAP_WIDTH) * mapRect.width;
+                const minY = (area.min_y / MAP_HEIGHT) * mapRect.height;
+                const maxY = (area.max_y / MAP_HEIGHT) * mapRect.height;
+                
+                const width = maxX - minX;
+                const height = maxY - minY;
+                
+                const areaEl = document.createElement('div');
+                areaEl.className = 'uncertainty-area';
+                areaEl.style.left = `${minX}px`;
+                areaEl.style.top = `${minY}px`;
+                areaEl.style.width = `${width}px`;
+                areaEl.style.height = `${height}px`;
+                
+                map.appendChild(areaEl);
+                
+            } else if (area.type === 'circle') {
+                // Draw circular uncertainty zone
+                const centerX = (area.center_x / MAP_WIDTH) * mapRect.width;
+                const centerY = (area.center_y / MAP_HEIGHT) * mapRect.height;
+                const radius = (area.radius / MAP_WIDTH) * mapRect.width;
+                
+                const diameter = radius * 2;
+                
+                const circleEl = document.createElement('div');
+                circleEl.className = 'uncertainty-circle';
+                circleEl.style.left = `${centerX - radius}px`;
+                circleEl.style.top = `${centerY - radius}px`;
+                circleEl.style.width = `${diameter}px`;
+                circleEl.style.height = `${diameter}px`;
+                
+                map.appendChild(circleEl);
+            }
         }
         
         // Render nodes on map
@@ -596,7 +717,7 @@
             });
         }
         
-        // Render device list
+        // Render device list in sidebar
         function renderDeviceList() {
             const list = document.getElementById('device-list');
             list.innerHTML = '';
@@ -616,12 +737,23 @@
                 
                 const timeSince = Math.round((Date.now() / 1000) - device.timestamp);
                 
+                // Determine what to show: name or MAC
+                const displayText = deviceNameStates[device.mac] === 'name' ? 
+                    device.name : 
+                    device.mac;
+                
                 item.innerHTML = `
-                    <div class="device-mac">${device.mac}</div>
+                    <div class="device-mac">
+                        <span class="device-name-toggle" onclick="toggleDeviceName('${device.mac}')" title="Click to toggle">
+                            ${displayText}
+                        </span>
+                    </div>
                     <div class="device-info">
                         Type: ${device.type.toUpperCase()} | 
-                        Position: (${device.position.x.toFixed(1)}, ${device.position.y.toFixed(1)}) | 
-                        ${timeSince}s ago
+                        Position: (${device.position.x.toFixed(1)}, ${device.position.y.toFixed(1)})m
+                    </div>
+                    <div class="device-info">
+                        Confidence: ${Math.round(device.confidence * 100)}% | ${timeSince}s ago
                     </div>
                     <div class="confidence-bar">
                         <div class="confidence-fill" style="width: ${device.confidence * 100}%"></div>

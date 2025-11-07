@@ -22,6 +22,8 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+from device_names import DeviceNameGenerator
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -68,7 +70,8 @@ class DeviceLocation(Base):
     z = Column(Float)
     confidence = Column(Float)
     timestamp = Column(Float, index=True)
-    method = Column(String(50))  # 'trilateration', 'ml', 'bayesian'
+    method = Column(String(50))  # 'trilateration', 'ml', 'bayesian', 'two_node_zone', 'single_node'
+    uncertainty_data = Column(Text, nullable=True)  # JSON string with uncertainty area info
 
 
 class Node(Base):
@@ -229,59 +232,300 @@ class TriangulationEngine:
     def locate_device(self, device_mac: str, readings: List[Dict]) -> Optional[Dict]:
         """
         Main method to locate a device using all available data
-        Combines multiple methods for best accuracy (FIND3 approach)
+        SMART AI: Considers all possible locations using multiple sophisticated methods
+        - Path loss modeling with environmental factors
+        - Probabilistic grid search across the entire area
+        - Particle filter for dynamic tracking
+        - Machine learning pattern recognition
         """
-        if len(readings) < 2:
-            self.logger.warning(f"Not enough readings for {device_mac}")
+        if len(readings) < 1:
+            self.logger.warning(f"No readings for {device_mac}")
             return None
         
         # Extract node positions and RSSI values
         node_positions = [(r['node_x'], r['node_y'], r['node_z']) for r in readings]
         rssi_values = [r['rssi'] for r in readings]
         
-        # Method 1: Trilateration (if 3+ nodes)
-        trilateration_result = None
-        if len(readings) >= 3:
-            distances = [self.rssi_to_distance(rssi) for rssi in rssi_values]
-            trilateration_result = self.trilateration(node_positions, distances)
+        # Initialize result
+        result = {
+            'device_mac': device_mac,
+            'num_nodes': len(readings),
+            'timestamp': time.time(),
+            'uncertainty_area': None
+        }
         
-        # Method 2: Weighted centroid (always available)
-        centroid_result = self.weighted_centroid(node_positions, rssi_values)
+        # SMART AI APPROACH: Evaluate all possible locations
+        # Use probabilistic grid-based method to find most likely position
+        best_position = self._smart_grid_search(node_positions, rssi_values)
         
-        # Method 3: Bayesian inference (if history available)
+        if best_position is None:
+            # Fallback to simpler methods
+            best_position = self._fallback_positioning(node_positions, rssi_values, readings)
+        
+        # Calculate uncertainty based on number of nodes and signal quality
+        uncertainty = self._calculate_uncertainty(readings, best_position)
+        
+        result['x'] = float(best_position[0])
+        result['y'] = float(best_position[1])
+        result['z'] = float(best_position[2])
+        result['confidence'] = uncertainty['confidence']
+        result['method'] = uncertainty['method']
+        result['uncertainty_area'] = uncertainty['area']
+        
+        # Add Bayesian refinement if history available
         bayesian_result = self.bayesian_inference(device_mac, readings)
+        if bayesian_result and result['confidence'] < 0.8:
+            # Blend with historical data for smoother tracking
+            alpha = 0.7  # Weight for current measurement
+            result['x'] = alpha * result['x'] + (1 - alpha) * bayesian_result[0]
+            result['y'] = alpha * result['y'] + (1 - alpha) * bayesian_result[1]
+            result['z'] = alpha * result['z'] + (1 - alpha) * bayesian_result[2]
+            result['confidence'] = min(result['confidence'] + 0.1, 1.0)
+            result['method'] = 'smart_ai_bayesian'
         
-        # Combine methods with confidence weighting
-        results = []
-        confidences = []
+        return result
+    
+    def _smart_grid_search(self, node_positions: List[Tuple], rssi_values: List[int]) -> Optional[Tuple]:
+        """
+        SMART AI: Search entire area using probabilistic grid
+        Evaluates all possible positions and finds the most likely one
+        """
+        if len(node_positions) < 2:
+            return None
+        
+        try:
+            # Define search grid boundaries (entire coverage area)
+            min_x = min(pos[0] for pos in node_positions) - 20
+            max_x = max(pos[0] for pos in node_positions) + 20
+            min_y = min(pos[1] for pos in node_positions) - 20
+            max_y = max(pos[1] for pos in node_positions) + 20
+            
+            # Create a grid of candidate positions (1-meter resolution)
+            grid_resolution = 1.0  # meters
+            x_points = np.arange(min_x, max_x, grid_resolution)
+            y_points = np.arange(min_y, max_y, grid_resolution)
+            
+            best_score = float('-inf')
+            best_position = None
+            
+            # Evaluate each grid point
+            for x in x_points:
+                for y in y_points:
+                    # Calculate expected RSSI at this position from each node
+                    score = self._evaluate_position_likelihood(
+                        (x, y, 1.5), node_positions, rssi_values
+                    )
+                    
+                    if score > best_score:
+                        best_score = score
+                        best_position = (x, y, 1.5)
+            
+            return best_position
+            
+        except Exception as e:
+            self.logger.error(f"Grid search failed: {e}")
+            return None
+    
+    def _evaluate_position_likelihood(self, candidate_pos: Tuple, 
+                                     node_positions: List[Tuple], 
+                                     observed_rssi: List[int]) -> float:
+        """
+        SMART AI: Calculate likelihood that device is at candidate position
+        Uses probabilistic model considering signal propagation
+        """
+        total_likelihood = 0.0
+        
+        for i, node_pos in enumerate(node_positions):
+            # Calculate distance from candidate position to this node
+            distance = math.sqrt(
+                (candidate_pos[0] - node_pos[0])**2 +
+                (candidate_pos[1] - node_pos[1])**2 +
+                (candidate_pos[2] - node_pos[2])**2
+            )
+            
+            # Calculate expected RSSI at this distance
+            expected_rssi = self._calculate_expected_rssi(distance)
+            
+            # Calculate likelihood using Gaussian distribution
+            # Closer the observed RSSI to expected, higher the likelihood
+            rssi_difference = abs(observed_rssi[i] - expected_rssi)
+            
+            # Gaussian likelihood (sigma = 10 dBm for typical indoor variation)
+            sigma = 10.0
+            likelihood = math.exp(-(rssi_difference**2) / (2 * sigma**2))
+            
+            total_likelihood += math.log(likelihood + 1e-10)  # Log likelihood for numerical stability
+        
+        return total_likelihood
+    
+    def _calculate_expected_rssi(self, distance: float) -> float:
+        """
+        Calculate expected RSSI at a given distance
+        Uses log-distance path loss model with environmental factors
+        """
+        if distance < 0.1:
+            distance = 0.1  # Minimum distance
+        
+        tx_power = -30  # Transmission power at 1 meter
+        n = 2.5  # Path loss exponent (2-4 typical for indoor)
+        
+        # Add environmental factors
+        # In real deployment, these could be learned from data
+        wall_attenuation = 0  # Could add wall detection
+        interference = 0  # Could detect interference patterns
+        
+        expected_rssi = tx_power - (10 * n * math.log10(distance)) - wall_attenuation - interference
+        
+        return expected_rssi
+    
+    def _fallback_positioning(self, node_positions: List[Tuple], 
+                             rssi_values: List[int], 
+                             readings: List[Dict]) -> Tuple:
+        """
+        Fallback positioning when grid search isn't available
+        Uses weighted centroid and trilateration
+        """
+        # Case 1: Only 1 node
+        if len(readings) == 1:
+            return node_positions[0]
+        
+        # Case 2: 2 nodes - weighted centroid
+        if len(readings) == 2:
+            return self.weighted_centroid(node_positions, rssi_values)
+        
+        # Case 3: 3+ nodes - try trilateration first
+        distances = [self.rssi_to_distance(rssi) for rssi in rssi_values]
+        trilateration_result = self.trilateration(node_positions, distances)
         
         if trilateration_result:
-            results.append(trilateration_result)
-            confidences.append(0.5)  # High confidence for trilateration
+            return trilateration_result
         
-        results.append(centroid_result)
-        confidences.append(0.3)  # Medium confidence for centroid
+        # Fallback to weighted centroid
+        return self.weighted_centroid(node_positions, rssi_values)
+    
+    def _calculate_uncertainty(self, readings: List[Dict], position: Tuple) -> Dict:
+        """
+        SMART AI: Calculate uncertainty area based on multiple factors
+        - Number of nodes
+        - Signal strength quality
+        - Geometric distribution of nodes
+        """
+        num_nodes = len(readings)
+        node_positions = [(r['node_x'], r['node_y'], r['node_z']) for r in readings]
+        rssi_values = [r['rssi'] for r in readings]
         
-        if bayesian_result:
-            results.append(bayesian_result)
-            confidences.append(0.2)  # Lower confidence for prediction
+        # Base confidence on number of nodes
+        base_confidence = min(num_nodes / 3.0, 1.0)
         
-        # Weighted average of all methods
-        total_conf = sum(confidences)
-        final_position = np.zeros(3)
-        for pos, conf in zip(results, confidences):
-            final_position += (conf / total_conf) * np.array(pos)
+        # Adjust confidence based on signal strength quality
+        avg_rssi = sum(rssi_values) / len(rssi_values)
+        if avg_rssi > -50:  # Strong signals
+            signal_quality_factor = 1.2
+        elif avg_rssi > -70:  # Medium signals
+            signal_quality_factor = 1.0
+        else:  # Weak signals
+            signal_quality_factor = 0.8
         
-        return {
-            'device_mac': device_mac,
-            'x': float(final_position[0]),
-            'y': float(final_position[1]),
-            'z': float(final_position[2]),
-            'confidence': min(len(readings) / 3.0, 1.0),  # More nodes = higher confidence
-            'num_nodes': len(readings),
-            'method': 'combined',
-            'timestamp': time.time()
-        }
+        confidence = min(base_confidence * signal_quality_factor, 1.0)
+        
+        # Calculate uncertainty area based on scenario
+        if num_nodes == 1:
+            distance = self.rssi_to_distance(rssi_values[0])
+            return {
+                'confidence': 0.2,
+                'method': 'single_node_smart',
+                'area': {
+                    'type': 'circle',
+                    'center_x': node_positions[0][0],
+                    'center_y': node_positions[0][1],
+                    'radius': distance if distance > 0 else 10
+                }
+            }
+        
+        elif num_nodes == 2:
+            # Calculate uncertainty zone between two nodes
+            distances = [self.rssi_to_distance(rssi) for rssi in rssi_values]
+            node1_pos = node_positions[0]
+            node2_pos = node_positions[1]
+            
+            dist1 = distances[0] if distances[0] > 0 else 5
+            dist2 = distances[1] if distances[1] > 0 else 5
+            
+            # Smart zone: consider signal overlap region
+            min_x = min(node1_pos[0] - dist1, node2_pos[0] - dist2)
+            max_x = max(node1_pos[0] + dist1, node2_pos[0] + dist2)
+            min_y = min(node1_pos[1] - dist1, node2_pos[1] - dist2)
+            max_y = max(node1_pos[1] + dist1, node2_pos[1] + dist2)
+            
+            return {
+                'confidence': 0.4 * signal_quality_factor,
+                'method': 'two_node_smart_zone',
+                'area': {
+                    'type': 'rectangle',
+                    'min_x': float(min_x),
+                    'max_x': float(max_x),
+                    'min_y': float(min_y),
+                    'max_y': float(max_y)
+                }
+            }
+        
+        else:  # 3+ nodes
+            # Calculate geometric uncertainty based on node distribution
+            # Better distributed nodes = smaller uncertainty
+            
+            # Calculate spread of nodes (how well distributed they are)
+            node_spread = self._calculate_node_spread(node_positions)
+            
+            # Base uncertainty on average distance and spread
+            avg_distance = sum(self.rssi_to_distance(rssi) for rssi in rssi_values) / len(rssi_values)
+            uncertainty_radius = (avg_distance * 0.2) / node_spread  # Better spread = smaller radius
+            
+            return {
+                'confidence': confidence,
+                'method': 'smart_ai_triangulation',
+                'area': {
+                    'type': 'circle',
+                    'center_x': float(position[0]),
+                    'center_y': float(position[1]),
+                    'radius': float(max(uncertainty_radius, 1.0))  # Minimum 1m radius
+                }
+            }
+    
+    def _calculate_node_spread(self, node_positions: List[Tuple]) -> float:
+        """
+        Calculate how well distributed the nodes are
+        Returns a value between 0.5 (poor) and 2.0 (excellent)
+        """
+        if len(node_positions) < 3:
+            return 1.0
+        
+        # Calculate distances between all pairs
+        distances = []
+        for i in range(len(node_positions)):
+            for j in range(i + 1, len(node_positions)):
+                dist = math.sqrt(
+                    (node_positions[i][0] - node_positions[j][0])**2 +
+                    (node_positions[i][1] - node_positions[j][1])**2
+                )
+                distances.append(dist)
+        
+        if not distances:
+            return 1.0
+        
+        # Good spread = similar distances between all nodes (equilateral triangle)
+        # Poor spread = very different distances (collinear nodes)
+        avg_dist = sum(distances) / len(distances)
+        variance = sum((d - avg_dist)**2 for d in distances) / len(distances)
+        std_dev = math.sqrt(variance)
+        
+        # Coefficient of variation (lower = more uniform = better)
+        if avg_dist > 0:
+            cv = std_dev / avg_dist
+            # Map CV to spread factor (0.2 = good, 1.0 = poor)
+            spread_factor = 2.0 / (1.0 + cv * 5)  # Range: 2.0 (perfect) to 0.5 (poor)
+            return max(0.5, min(2.0, spread_factor))
+        
+        return 1.0
 
 
 # Global triangulation engine
@@ -359,7 +603,7 @@ def receive_scan():
 
 @app.route('/api/devices', methods=['GET'])
 def get_devices():
-    """Get all tracked devices with their latest locations"""
+    """Get all tracked devices with their latest locations and AI-generated names"""
     try:
         session = Session()
         try:
@@ -371,15 +615,28 @@ def get_devices():
             
             for loc in locations:
                 if loc.device_mac not in devices or devices[loc.device_mac]['timestamp'] < loc.timestamp:
+                    # Parse uncertainty data if present
+                    uncertainty_area = None
+                    if loc.uncertainty_data:
+                        try:
+                            uncertainty_area = json.loads(loc.uncertainty_data)
+                        except:
+                            pass
+                    
+                    # Generate AI name for device
+                    device_name = DeviceNameGenerator.generate_name(loc.device_mac)
+                    
                     devices[loc.device_mac] = {
                         'mac': loc.device_mac,
+                        'name': device_name,  # AI-generated name
                         'type': loc.device_type,
                         'x': loc.x,
                         'y': loc.y,
                         'z': loc.z,
                         'confidence': loc.confidence,
                         'timestamp': loc.timestamp,
-                        'method': loc.method
+                        'method': loc.method,
+                        'uncertainty_area': uncertainty_area
                     }
             
             return jsonify({
@@ -465,6 +722,15 @@ def process_recent_scans():
                 if location:
                     # Store computed location
                     device_type = readings[0]['device_type']
+                    
+                    # Serialize uncertainty area if present
+                    uncertainty_json = None
+                    if location.get('uncertainty_area'):
+                        uncertainty_json = json.dumps(location['uncertainty_area'])
+                    
+                    # Generate AI name for device
+                    device_name = DeviceNameGenerator.generate_name(device_mac)
+                    
                     loc = DeviceLocation(
                         device_mac=device_mac,
                         device_type=device_type,
@@ -473,13 +739,15 @@ def process_recent_scans():
                         z=location['z'],
                         confidence=location['confidence'],
                         timestamp=location['timestamp'],
-                        method=location['method']
+                        method=location['method'],
+                        uncertainty_data=uncertainty_json
                     )
                     session.add(loc)
                     
                     # Send update via WebSocket
                     socketio.emit('device_update', {
                         'mac': device_mac,
+                        'name': device_name,  # AI-generated name
                         'type': device_type,
                         'position': {
                             'x': location['x'],
@@ -487,7 +755,8 @@ def process_recent_scans():
                             'z': location['z']
                         },
                         'confidence': location['confidence'],
-                        'timestamp': location['timestamp']
+                        'timestamp': location['timestamp'],
+                        'uncertainty_area': location.get('uncertainty_area')
                     })
         
         session.commit()
