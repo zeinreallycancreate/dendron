@@ -7,6 +7,25 @@ echo "Server Setup for Triangulation System"
 echo "======================================"
 echo ""
 
+# Ask if this is a dual-role setup
+echo "Is this machine also running as a scanner node?"
+echo "  1) Server only (no scanning)"
+echo "  2) Server + Scanner (dual-role)"
+echo ""
+read -p "Choose setup type (1 or 2): " SERVER_TYPE
+echo ""
+
+IS_DUAL_ROLE=false
+if [[ "$SERVER_TYPE" == "2" ]]; then
+    IS_DUAL_ROLE=true
+    echo "Selected: Server + Scanner (dual-role)"
+    echo "Note: Also run setup_ubuntu.sh for client dependencies"
+else
+    echo "Selected: Server only"
+fi
+
+echo ""
+
 # Check if running as root (not recommended for server)
 if [ "$EUID" -eq 0 ]; then
     echo "Warning: Running as root. Consider running as a regular user."
@@ -58,8 +77,26 @@ echo "System Information:"
 echo "  OS: $ID $VERSION_ID"
 echo "  Python: $(python3 --version)"
 echo ""
-echo "Next steps:"
-echo "1. Start the server: ./scripts/start_server.sh"
-echo "2. Access web interface: http://YOUR_IP:5000"
-echo "3. Configure firewall if needed: sudo ufw allow 5000"
+
+# Get server IP
+if command -v hostname &> /dev/null; then
+    SERVER_IP=$(hostname -I | awk '{print $1}')
+    echo "Server IP Address: $SERVER_IP"
+    echo ""
+fi
+
+if [[ "$IS_DUAL_ROLE" == "true" ]]; then
+    echo "Next steps for DUAL-ROLE setup:"
+    echo "1. Run client setup: sudo ./scripts/setup_ubuntu.sh"
+    echo "   (Choose option 2: Server + Client)"
+    echo "2. Start both: sudo ./scripts/start_server_and_node.sh configs/node1_config.yml"
+    echo "3. Access web interface: http://localhost:5000"
+else
+    echo "Next steps for SERVER ONLY setup:"
+    echo "1. Start the server: ./scripts/start_server.sh"
+    echo "2. Access web interface: http://$SERVER_IP:5000"
+    echo "3. Configure firewall if needed: sudo ufw allow 5000"
+    echo "4. Configure client nodes to connect to: http://$SERVER_IP:5000"
+fi
+
 echo ""
