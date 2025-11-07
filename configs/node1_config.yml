@@ -1,0 +1,23 @@
+# Configuration for Scanner Node 1
+# This node should be placed at the BOTTOM-LEFT corner of your triangle
+
+node_id: "node_1"
+
+# Position in meters (x, y, z)
+# Adjust these based on your actual room layout
+position:
+  x: 0      # Left edge
+  y: 0      # Bottom edge
+  z: 1.5    # Height of Raspberry Pi (meters)
+
+# Server connection
+server_url: "http://YOUR_SERVER_IP:5000"
+
+# WiFi interface to use for scanning
+wifi_interface: "wlan0"
+
+# How often to scan (seconds)
+scan_interval: 5
+
+# Anonymize MAC addresses for privacy (true/false)
+anonymize_mac: false
