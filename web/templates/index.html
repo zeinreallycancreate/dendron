@@ -48,6 +48,12 @@
             margin-bottom: 20px;
         }
         
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
         .card {
             background: rgba(255, 255, 255, 0.95);
             border-radius: 10px;
@@ -274,6 +280,59 @@
             border-radius: 3px;
         }
         
+        .node-list {
+            margin-top: 15px;
+        }
+        
+        .node-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #FF5722;
+            transition: all 0.3s;
+        }
+        
+        .node-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+        
+        .node-item.inactive {
+            opacity: 0.6;
+            border-left-color: #999;
+        }
+        
+        .node-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .node-info {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .node-status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        
+        .node-status-badge.active {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .node-status-badge.inactive {
+            background: #f44336;
+            color: white;
+        }
+        
         @media (max-width: 1024px) {
             .dashboard {
                 grid-template-columns: 1fr;
@@ -289,23 +348,25 @@
         </header>
         
         <div class="dashboard">
-            <div class="card">
-                <h2>Live Map</h2>
-                <div id="map-container">
-                    <div id="map"></div>
-                </div>
-                <div class="legend">
-                    <div class="legend-item">
-                        <div class="legend-icon wifi"></div>
-                        <span>WiFi Device</span>
+            <div class="main-content">
+                <div class="card">
+                    <h2>Live Map</h2>
+                    <div id="map-container">
+                        <div id="map"></div>
                     </div>
-                    <div class="legend-item">
-                        <div class="legend-icon bluetooth"></div>
-                        <span>Bluetooth Device</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-icon node"></div>
-                        <span>Scanner Node</span>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-icon wifi"></div>
+                            <span>WiFi Device</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-icon bluetooth"></div>
+                            <span>Bluetooth Device</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-icon node"></div>
+                            <span>Scanner Node</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -321,6 +382,15 @@
                             <div class="stat-number" id="node-count">0</div>
                             <div class="stat-label">Scanner Nodes</div>
                         </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>Scanner Nodes</h2>
+                    <div class="node-list" id="node-list">
+                        <p style="text-align: center; color: #999; padding: 20px;">
+                            Waiting for nodes...
+                        </p>
                     </div>
                 </div>
                 
@@ -480,6 +550,49 @@
                 nodeEl.appendChild(label);
                 
                 map.appendChild(nodeEl);
+            });
+            
+            // Update node list sidebar
+            renderNodeList();
+        }
+        
+        // Render node list in sidebar
+        function renderNodeList() {
+            const list = document.getElementById('node-list');
+            list.innerHTML = '';
+            
+            const nodeArray = Object.values(nodes);
+            if (nodeArray.length === 0) {
+                list.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No nodes connected</p>';
+                return;
+            }
+            
+            // Sort by node_id
+            nodeArray.sort((a, b) => a.id.localeCompare(b.id));
+            
+            nodeArray.forEach(node => {
+                const item = document.createElement('div');
+                const timeSince = Math.round((Date.now() / 1000) - (node.last_seen || 0));
+                const isActive = timeSince < 30; // Active if seen in last 30 seconds
+                
+                item.className = `node-item ${isActive ? 'active' : 'inactive'}`;
+                
+                item.innerHTML = `
+                    <div class="node-name">
+                        ${node.id}
+                        <span class="node-status-badge ${isActive ? 'active' : 'inactive'}">
+                            ${isActive ? 'ACTIVE' : 'OFFLINE'}
+                        </span>
+                    </div>
+                    <div class="node-info">
+                        Position: (${node.x.toFixed(1)}, ${node.y.toFixed(1)}, ${node.z.toFixed(1)})m
+                    </div>
+                    <div class="node-info">
+                        Last seen: ${timeSince}s ago
+                    </div>
+                `;
+                
+                list.appendChild(item);
             });
         }
         

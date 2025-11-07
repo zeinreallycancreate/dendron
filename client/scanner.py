@@ -47,66 +47,148 @@ class WiFiScanner:
         self.logger = logging.getLogger(f"{__name__}.WiFiScanner")
         
     def enable_monitor_mode(self) -> bool:
-        """Enable monitor mode on the WiFi interface"""
+        """
+        Enable monitor mode on the WiFi interface
+        Works with standard Raspberry Pi WiFi (no extra antennas needed)
+        Falls back gracefully to managed mode if monitor mode fails
+        """
         try:
             import subprocess
-            # Stop network manager from interfering
-            subprocess.run(["sudo", "airmon-ng", "check", "kill"], 
-                         capture_output=True, timeout=10)
-            # Enable monitor mode
-            subprocess.run(["sudo", "ifconfig", self.interface, "down"], 
-                         capture_output=True, timeout=10)
-            subprocess.run(["sudo", "iwconfig", self.interface, "mode", "monitor"], 
-                         capture_output=True, timeout=10)
-            subprocess.run(["sudo", "ifconfig", self.interface, "up"], 
-                         capture_output=True, timeout=10)
-            self.logger.info(f"Monitor mode enabled on {self.interface}")
-            return True
+            
+            self.logger.info("Attempting to enable monitor mode...")
+            
+            # Method 1: Try using iw (modern approach, works with standard Pi WiFi)
+            try:
+                # Check if interface supports monitor mode
+                result = subprocess.run(
+                    ["iw", "phy", "phy0", "info"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                
+                if "monitor" in result.stdout.lower():
+                    self.logger.info("Interface supports monitor mode")
+                    
+                    # Create a monitor interface
+                    subprocess.run(["sudo", "iw", "dev", self.interface, "interface", "add", "mon0", "type", "monitor"],
+                                 capture_output=True, timeout=5)
+                    subprocess.run(["sudo", "ip", "link", "set", "mon0", "up"],
+                                 capture_output=True, timeout=5)
+                    
+                    # Check if it worked
+                    result = subprocess.run(["ip", "link", "show", "mon0"],
+                                          capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0:
+                        self.interface = "mon0"
+                        self.logger.info(f"Monitor mode enabled on {self.interface}")
+                        return True
+            except Exception as e:
+                self.logger.debug(f"iw method failed: {e}")
+            
+            # Method 2: Try using iwconfig (older approach, still works)
+            try:
+                subprocess.run(["sudo", "ifconfig", self.interface, "down"], 
+                             capture_output=True, timeout=5)
+                subprocess.run(["sudo", "iwconfig", self.interface, "mode", "monitor"], 
+                             capture_output=True, timeout=5)
+                subprocess.run(["sudo", "ifconfig", self.interface, "up"], 
+                             capture_output=True, timeout=5)
+                
+                # Verify it worked
+                result = subprocess.run(["iwconfig", self.interface],
+                                      capture_output=True, text=True, timeout=5)
+                if "Mode:Monitor" in result.stdout:
+                    self.logger.info(f"Monitor mode enabled on {self.interface} using iwconfig")
+                    return True
+            except Exception as e:
+                self.logger.debug(f"iwconfig method failed: {e}")
+            
+            # If we get here, monitor mode failed
+            self.logger.warning("Monitor mode not available")
+            return False
+            
         except Exception as e:
             self.logger.error(f"Failed to enable monitor mode: {e}")
-            # Fallback to managed mode scanning
-            self.logger.warning("Falling back to managed mode scanning")
+            self.logger.warning("Falling back to managed mode scanning (still works!)")
             return False
     
     def scan_wifi_devices(self) -> List[Dict]:
         """
         Scan for WiFi devices and return signal strength data
-        Uses scapy for packet sniffing in monitor mode
+        Uses scapy for packet sniffing in monitor mode, or falls back to managed mode
+        Works with standard Raspberry Pi WiFi (no extra antennas needed)
         """
         try:
-            from scapy.all import sniff, Dot11, Dot11Elt
+            from scapy.all import sniff, Dot11, Dot11Elt, RadioTap
             
             devices = {}
+            scan_count = 0
             
             def packet_handler(pkt):
+                nonlocal scan_count
+                scan_count += 1
+                
                 if pkt.haslayer(Dot11):
-                    # Get MAC address
+                    # Get MAC address - try multiple fields
+                    mac = None
                     if pkt.addr2 and pkt.addr2 != "ff:ff:ff:ff:ff:ff":
                         mac = pkt.addr2
-                        
-                        # Get RSSI (signal strength)
-                        try:
+                    elif pkt.addr1 and pkt.addr1 != "ff:ff:ff:ff:ff:ff":
+                        mac = pkt.addr1
+                    
+                    if not mac:
+                        return
+                    
+                    # Get RSSI (signal strength)
+                    rssi = -100  # Default weak signal
+                    try:
+                        # Try RadioTap layer first (most accurate)
+                        if pkt.haslayer(RadioTap):
+                            rssi = pkt[RadioTap].dBm_AntSignal
+                        # Fallback to Dot11 layer
+                        elif hasattr(pkt, 'dBm_AntSignal'):
                             rssi = pkt.dBm_AntSignal
-                        except AttributeError:
-                            rssi = -100  # Default weak signal
-                        
-                        # Get SSID if available
-                        ssid = None
+                    except (AttributeError, IndexError):
+                        pass
+                    
+                    # Get SSID if available (for probe requests or beacons)
+                    ssid = None
+                    try:
                         if pkt.haslayer(Dot11Elt):
                             ssid = pkt[Dot11Elt].info.decode('utf-8', errors='ignore')
-                        
-                        # Update device info (keep strongest signal)
-                        if mac not in devices or devices[mac]['rssi'] < rssi:
-                            devices[mac] = {
-                                'mac': mac,
-                                'rssi': rssi,
-                                'ssid': ssid,
-                                'timestamp': time.time()
-                            }
+                            if ssid == "":
+                                ssid = None
+                    except:
+                        pass
+                    
+                    # Update device info (keep strongest signal)
+                    if mac not in devices or devices[mac]['rssi'] < rssi:
+                        devices[mac] = {
+                            'mac': mac,
+                            'rssi': rssi,
+                            'ssid': ssid,
+                            'timestamp': time.time()
+                        }
             
             # Sniff for 3 seconds
-            self.logger.info("Starting WiFi scan...")
-            sniff(iface=self.interface, prn=packet_handler, timeout=3, store=False)
+            self.logger.info(f"Starting WiFi scan on {self.interface}...")
+            try:
+                sniff(iface=self.interface, prn=packet_handler, timeout=3, store=False)
+            except PermissionError:
+                self.logger.error("Permission denied - run with sudo!")
+                return []
+            
+            self.logger.info(f"Captured {scan_count} packets, found {len(devices)} unique devices")
+            
+            # If we found very few devices in monitor mode, supplement with managed mode
+            if len(devices) < 3:
+                self.logger.info("Few devices found, supplementing with managed mode scan...")
+                managed_devices = self._scan_wifi_managed_mode()
+                # Merge results
+                for dev in managed_devices:
+                    if dev['mac'] not in devices:
+                        devices[dev['mac']] = dev
             
             return list(devices.values())
             
@@ -115,7 +197,9 @@ class WiFiScanner:
             return self._scan_wifi_managed_mode()
         except Exception as e:
             self.logger.error(f"WiFi scan failed: {e}")
-            return []
+            # Always fallback to managed mode
+            self.logger.info("Falling back to managed mode...")
+            return self._scan_wifi_managed_mode()
     
     def _scan_wifi_managed_mode(self) -> List[Dict]:
         """Fallback scanning using iwlist in managed mode"""
