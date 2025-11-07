@@ -18,7 +18,7 @@ A FIND3-inspired triangulation system for tracking WiFi and Bluetooth devices us
 ## 📋 Hardware Requirements
 
 ### You Need:
-- **3 Raspberry Pi** running **Ubuntu 24.04.3** (Pi 3, 4, or 5 recommended)
+- **3 Raspberry Pi** running **Ubuntu 25.10 ARM 64-bit** (Pi 3, 4, or 5 recommended)
 - **1 Server** (can be another Raspberry Pi, or a regular computer on the same network)
 - Power supplies for all Raspberry Pis
 - Network connectivity (WiFi or Ethernet)
@@ -78,7 +78,7 @@ On your **first Raspberry Pi**:
    server_url: "http://192.168.1.100:5000"  # Replace with your server IP
    ```
 
-3. **Install system dependencies** (Ubuntu 24.04.3):
+3. **Install system dependencies** (Ubuntu 25.10 ARM64):
    ```bash
    sudo apt update
    sudo apt install -y python3-pip python3-venv python3-full \
@@ -342,7 +342,7 @@ Automatically installed by the startup scripts:
 - bluepy (Bluetooth scanning)
 - SQLAlchemy (database)
 
-System packages (install manually on Raspberry Pi with Ubuntu 24.04.3):
+System packages (install manually on Raspberry Pi with Ubuntu 25.10 ARM64):
 ```bash
 sudo apt update
 sudo apt install -y python3-pip python3-venv python3-full \

@@ -1,9 +1,9 @@
 #!/bin/bash
-# Setup script for Raspberry Pi running Ubuntu 24.04.3
+# Setup script for Raspberry Pi running Ubuntu 25.10 ARM 64-bit
 # This installs all system dependencies needed for the scanner nodes
 
 echo "======================================"
-echo "Ubuntu 24.04.3 Setup for Scanner Node"
+echo "Ubuntu 25.10 ARM64 Setup for Scanner Node"
 echo "======================================"
 echo ""
 
@@ -11,7 +11,18 @@ echo ""
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     if [[ "$ID" != "ubuntu" ]]; then
-        echo "Warning: This script is designed for Ubuntu 24.04.3"
+        echo "Warning: This script is designed for Ubuntu 25.10 ARM64"
+        read -p "Continue anyway? (y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+    fi
+    
+    # Check architecture
+    ARCH=$(uname -m)
+    if [[ "$ARCH" != "aarch64" ]] && [[ "$ARCH" != "arm64" ]]; then
+        echo "Warning: This system appears to be $ARCH, not ARM64"
         read -p "Continue anyway? (y/n) " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -26,6 +37,9 @@ if [ "$EUID" -ne 0 ]; then
     echo "Please run: sudo ./setup_ubuntu.sh"
     exit 1
 fi
+
+echo "System: Ubuntu $VERSION_ID on $ARCH"
+echo ""
 
 echo "Updating package lists..."
 apt update
@@ -57,6 +71,11 @@ echo ""
 echo "======================================"
 echo "Setup Complete!"
 echo "======================================"
+echo ""
+echo "System Information:"
+echo "  OS: Ubuntu $VERSION_ID"
+echo "  Architecture: $ARCH"
+echo "  Python: $(python3 --version)"
 echo ""
 echo "Next steps:"
 echo "1. Edit your node config file: configs/nodeX_config.yml"

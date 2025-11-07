@@ -4,12 +4,12 @@ WiFi/Bluetooth Device Triangulation System for Raspberry Pi
 
 ## Overview
 
-A FIND3-inspired triangulation system that tracks WiFi and Bluetooth devices using 3 Raspberry Pi nodes running Ubuntu 24.04.3. Features real-time tracking, AI-powered location prediction, and a live web interface.
+A FIND3-inspired triangulation system that tracks WiFi and Bluetooth devices using 3 Raspberry Pi nodes running Ubuntu 25.10 ARM 64-bit. Features real-time tracking, AI-powered location prediction, and a live web interface.
 
 ## Quick Start
 
 ### Hardware Needed
-- 3x Raspberry Pi (running Ubuntu 24.04.3)
+- 3x Raspberry Pi (running Ubuntu 25.10 ARM 64-bit)
 - 1x Server (any computer on your network)
 
 ### Installation
@@ -22,7 +22,7 @@ chmod +x start_server.sh
 ./start_server.sh
 ```
 
-**On Each Raspberry Pi (Ubuntu 24.04.3):**
+**On Each Raspberry Pi (Ubuntu 25.10 ARM64):**
 ```bash
 git clone https://github.com/zeinreallycancreate/dendron.git
 cd dendron/scripts
@@ -46,7 +46,7 @@ Open `http://YOUR_SERVER_IP:5000` in a browser to view the live tracking map.
 - ✅ AI-powered triangulation (trilateration + ML + Bayesian)
 - ✅ Real-time web interface with live map
 - ✅ Easy setup with automated scripts
-- ✅ Ubuntu 24.04.3 compatible
+- ✅ Ubuntu 25.10 ARM64 compatible
 
 ## Documentation
 
