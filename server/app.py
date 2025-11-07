@@ -23,6 +23,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from device_names import DeviceNameGenerator
+from node_geometry import NodeGeometry
 
 # Configure logging
 logging.basicConfig(
@@ -94,9 +95,10 @@ Base.metadata.create_all(engine)
 class TriangulationEngine:
     """
     Core triangulation engine using multiple methods:
-    1. Trilateration (geometric)
-    2. Machine Learning (FIND3-inspired)
-    3. Bayesian inference
+    Adapts to any number of nodes (1 to N)
+    1. Trilateration (geometric) - works with 3+ nodes
+    2. Multi-node positioning - works with any number
+    3. Bayesian inference - uses history
     """
     
     def __init__(self):
@@ -104,6 +106,7 @@ class TriangulationEngine:
         self.scaler = StandardScaler()
         self.ml_model = None
         self.fingerprint_db = {}  # For FIND3-style fingerprinting
+        self.node_geometry = NodeGeometry()  # Auto-detect node configuration
         
     def rssi_to_distance(self, rssi: int, frequency: int = 2400) -> float:
         """
@@ -289,16 +292,18 @@ class TriangulationEngine:
         """
         SMART AI: Search entire area using probabilistic grid
         Evaluates all possible positions and finds the most likely one
+        Adapts to any number of nodes automatically
         """
-        if len(node_positions) < 2:
+        if len(node_positions) < 1:
             return None
         
+        if len(node_positions) == 1:
+            # With 1 node, return that node's position
+            return node_positions[0]
+        
         try:
-            # Define search grid boundaries (entire coverage area)
-            min_x = min(pos[0] for pos in node_positions) - 20
-            max_x = max(pos[0] for pos in node_positions) + 20
-            min_y = min(pos[1] for pos in node_positions) - 20
-            max_y = max(pos[1] for pos in node_positions) + 20
+            # Use node geometry for optimal search boundaries
+            min_x, max_x, min_y, max_y = self.node_geometry.get_optimal_search_grid()
             
             # Create a grid of candidate positions (1-meter resolution)
             grid_resolution = 1.0  # meters
@@ -588,6 +593,9 @@ def receive_scan():
             
             session.commit()
             
+            # Update node geometry after adding/updating nodes
+            _update_node_geometry()
+            
             # Trigger location computation for detected devices
             process_recent_scans()
             
@@ -686,6 +694,37 @@ def get_nodes():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+def _update_node_geometry():
+    """
+    Update the triangulation engine's node geometry
+    Called whenever nodes change
+    """
+    try:
+        session = Session()
+        try:
+            nodes = session.query(Node).all()
+            node_data = [
+                {
+                    'node_id': n.node_id,
+                    'x': n.x,
+                    'y': n.y,
+                    'z': n.z,
+                    'last_seen': n.last_seen,
+                    'status': n.status
+                }
+                for n in nodes
+            ]
+            triangulation_engine.node_geometry.update_nodes(node_data)
+            
+            quality_score = triangulation_engine.node_geometry.calculate_node_quality_score()
+            logger.info(f"Node geometry updated: {len(nodes)} nodes, quality={quality_score:.2f}")
+            
+        finally:
+            session.close()
+    except Exception as e:
+        logger.error(f"Error updating node geometry: {e}")
+
+
 def process_recent_scans():
     """
     Process recent scans and compute device locations
@@ -779,6 +818,23 @@ def handle_connect():
 def handle_disconnect():
     """Handle WebSocket disconnection"""
     logger.info('Client disconnected from WebSocket')
+
+
+@app.route('/api/geometry', methods=['GET'])
+def get_geometry():
+    """Get current node geometry information"""
+    try:
+        geometry_info = {
+            'num_nodes': len(triangulation_engine.node_geometry.nodes),
+            'geometry_type': triangulation_engine.node_geometry.geometry_type,
+            'quality_score': triangulation_engine.node_geometry.calculate_node_quality_score(),
+            'coverage_area': triangulation_engine.node_geometry.coverage_area,
+            'nodes': triangulation_engine.node_geometry.nodes
+        }
+        return jsonify({'status': 'success', 'geometry': geometry_info}), 200
+    except Exception as e:
+        logger.error(f"Error getting geometry: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 def main():
