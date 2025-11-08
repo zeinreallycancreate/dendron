@@ -42,10 +42,11 @@ The script will:
 
 **On Pi #1 (Server + Scanner):**
 ```bash
-git clone https://github.com/zeinreallycancreate/dendron.git
-cd dendron/scripts
+git clone -b copilot/build-client-for-triangulation https://github.com/zeinreallycancreate/dendron.git
+cd dendron
 
 # Install client deps with automatic config
+cd scripts
 sudo ./setup_ubuntu.sh
 # Choose: 2 (Server + Client)
 # Choose node: 1
@@ -54,22 +55,25 @@ sudo ./setup_ubuntu.sh
 sudo ./setup_server.sh
 # Choose: 2 (Server + Scanner)
 
-# Start both
+# Start both (run from scripts directory)
 sudo ./start_server_and_node.sh ../configs/node1_config.yml
 ```
 
+**Important:** When running scripts, make sure you're in the `scripts/` directory and use `./scriptname.sh` (not `./scripts/scriptname.sh`).
+
 **On Pi #2 (Client Only):**
 ```bash
-git clone https://github.com/zeinreallycancreate/dendron.git
-cd dendron/scripts
+git clone -b copilot/build-client-for-triangulation https://github.com/zeinreallycancreate/dendron.git
+cd dendron
 
 # Install with automatic config
+cd scripts
 sudo ./setup_ubuntu.sh
 # Choose: 1 (Client only)
 # Enter server IP: 192.168.1.100 (Pi #1's IP)
 # Choose node: 2
 
-# Start scanner
+# Start scanner (run from scripts directory)
 sudo ./start_node2.sh
 ```
 
@@ -98,6 +102,48 @@ sudo ./start_node2.sh
 ```
 
 **On Pi #3 (Client Only):**
+```bash
+cd dendron
+
+cd scripts
+sudo ./setup_ubuntu.sh
+# Choose: 1 (Client only)
+# Server IP: 192.168.1.100
+# Node: 3
+
+sudo ./start_node3.sh
+```
+
+## Troubleshooting
+
+### Script Not Found Error
+
+If you see:
+```
+sudo-rs: './scripts/setup_server.sh': command not found
+```
+
+**Cause:** You're already in the `scripts/` directory. The `./scripts/` path tries to look for another `scripts` subdirectory.
+
+**Fix:** When in the `scripts/` directory, omit the `scripts/` part:
+```bash
+cd ~/dendron/scripts
+sudo ./setup_ubuntu.sh       # ✅ Correct
+sudo ./setup_server.sh       # ✅ Correct
+```
+
+NOT:
+```bash
+sudo ./scripts/setup_ubuntu.sh  # ❌ Wrong when already in scripts/
+```
+
+**Alternative:** Run from project root:
+```bash
+cd ~/dendron
+sudo ./scripts/setup_ubuntu.sh   # ✅ Also correct
+```
+
+See `TROUBLESHOOTING.md` for more common issues.
 ```bash
 sudo ./setup_ubuntu.sh
 # Choose: 1 (Client only)

@@ -18,28 +18,47 @@ A FIND3-inspired triangulation system that tracks WiFi and Bluetooth devices usi
 
 ### Installation
 
-**On Server:**
+**Option 1: Quick Setup (Automatic Configuration)**
+
+All Raspberry Pis:
 ```bash
-git clone https://github.com/zeinreallycancreate/dendron.git
-cd dendron/scripts
-chmod +x setup_server.sh
+git clone -b copilot/build-client-for-triangulation https://github.com/zeinreallycancreate/dendron.git
+cd dendron
+
+cd scripts
+sudo ./setup_ubuntu.sh  # Interactive - answers questions and auto-configures
+# If server+client: also run: sudo ./setup_server.sh
+# Start: sudo ./start_nodeX.sh (or start_server_and_node.sh for dual-role)
+```
+
+**Option 2: Manual Setup (Separate Server)**
+
+On Server:
+```bash
+git clone -b copilot/build-client-for-triangulation https://github.com/zeinreallycancreate/dendron.git
+cd dendron
+
+cd scripts
+chmod +x setup_server.sh start_server.sh
 sudo ./setup_server.sh  # Install server dependencies
-chmod +x start_server.sh
 ./start_server.sh
 ```
 
-**On Each Raspberry Pi (Ubuntu 25.10 ARM64):**
+On Each Raspberry Pi (Ubuntu 25.10 ARM64):
 ```bash
-git clone https://github.com/zeinreallycancreate/dendron.git
-cd dendron/scripts
-chmod +x setup_ubuntu.sh
+git clone -b copilot/build-client-for-triangulation https://github.com/zeinreallycancreate/dendron.git
+cd dendron
+
+cd scripts
+chmod +x setup_ubuntu.sh start_node1.sh
 sudo ./setup_ubuntu.sh  # Install dependencies
 nano ../configs/node1_config.yml  # Update server_url
-chmod +x start_node1.sh
 ./start_node1.sh
 ```
 
 Repeat for each additional node (node2, node3, node4, etc.).
+
+**Important:** When running scripts from the `scripts/` directory, use `./scriptname.sh` not `./scripts/scriptname.sh`. See `TROUBLESHOOTING.md` for details.
 
 ### Access
 Open `http://YOUR_SERVER_IP:5000` in a browser to view the live tracking map.

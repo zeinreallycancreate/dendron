@@ -37,13 +37,19 @@ You can run both the server and a scanner client on the same Raspberry Pi. This 
 On your Raspberry Pi that will run both roles:
 
 ```bash
-git clone https://github.com/zeinreallycancreate/dendron.git
-cd dendron/scripts
+git clone -b copilot/build-client-for-triangulation https://github.com/zeinreallycancreate/dendron.git
+cd dendron
 
 # Install all dependencies (server + client)
+cd scripts
 sudo ./setup_ubuntu.sh
 sudo ./setup_server.sh
 ```
+
+**Troubleshooting:** If you see "command not found", make sure:
+1. You're in the `scripts/` directory: `pwd` should show `.../dendron/scripts`
+2. Use `./setup_ubuntu.sh` not `./scripts/setup_ubuntu.sh`
+3. See `TROUBLESHOOTING.md` for more help
 
 ### Step 2: Configure This Node
 
@@ -78,9 +84,14 @@ anonymize_mac: false
 Use the combined startup script:
 
 ```bash
-cd scripts
+# Make sure you're in the scripts directory
+cd ~/dendron/scripts
+
+# Start both services
 sudo ./start_server_and_node.sh ../configs/node1_config.yml
 ```
+
+**Note:** The path `../configs/node1_config.yml` is correct - it goes up one directory from `scripts/` to find the `configs/` directory.
 
 This will:
 1. Start the server in the background

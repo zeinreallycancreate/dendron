@@ -2,6 +2,23 @@
 # Setup script for Triangulation Server
 # Run this on your server machine (can be a Raspberry Pi or regular computer)
 
+# Check if we're being run from the correct location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ ! -f "$SCRIPT_DIR/setup_server.sh" ]]; then
+    echo "❌ ERROR: Script not found in expected location"
+    echo ""
+    echo "Make sure you're running this from the scripts/ directory:"
+    echo "  cd ~/dendron/scripts"
+    echo "  sudo ./setup_server.sh"
+    echo ""
+    echo "Or from the project root:"
+    echo "  cd ~/dendron"
+    echo "  sudo ./scripts/setup_server.sh"
+    echo ""
+    echo "See TROUBLESHOOTING.md for more help"
+    exit 1
+fi
+
 echo "======================================"
 echo "Server Setup for Triangulation System"
 echo "======================================"

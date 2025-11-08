@@ -3,6 +3,23 @@
 # This installs all system dependencies needed for the scanner nodes
 # Can auto-configure server IP based on setup type
 
+# Check if we're being run from the correct location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ ! -f "$SCRIPT_DIR/setup_ubuntu.sh" ]]; then
+    echo "❌ ERROR: Script not found in expected location"
+    echo ""
+    echo "Make sure you're running this from the scripts/ directory:"
+    echo "  cd ~/dendron/scripts"
+    echo "  sudo ./setup_ubuntu.sh"
+    echo ""
+    echo "Or from the project root:"
+    echo "  cd ~/dendron"
+    echo "  sudo ./scripts/setup_ubuntu.sh"
+    echo ""
+    echo "See TROUBLESHOOTING.md for more help"
+    exit 1
+fi
+
 echo "======================================"
 echo "Ubuntu 25.10 ARM64 Setup for Scanner Node"
 echo "======================================"

@@ -37,11 +37,11 @@ A triangulation system with:
 **On your server computer:**
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/zeinreallycancreate/dendron.git
+# 1. Clone the repo with correct branch
+git clone -b copilot/build-client-for-triangulation https://github.com/zeinreallycancreate/dendron.git
 cd dendron
 
-# 2. Start the server (it will auto-install dependencies)
+# 2. Navigate to scripts and start the server (it will auto-install dependencies)
 cd scripts
 chmod +x start_server.sh
 ./start_server.sh
@@ -62,8 +62,8 @@ hostname -I
 
 #### Step 1: Initial Setup
 ```bash
-# Clone the repo on the Raspberry Pi
-git clone https://github.com/zeinreallycancreate/dendron.git
+# Clone the repo on the Raspberry Pi (use correct branch)
+git clone -b copilot/build-client-for-triangulation https://github.com/zeinreallycancreate/dendron.git
 cd dendron
 
 # Install dependencies
@@ -73,6 +73,8 @@ sudo ./setup_ubuntu.sh
 
 # Wait for installation to complete (~5 minutes)
 ```
+
+**Common Issue:** If you see "command not found", make sure you're in the `scripts/` directory and using `./setup_ubuntu.sh` (not `./scripts/setup_ubuntu.sh`). See TROUBLESHOOTING.md for details.
 
 #### Step 2: Configure Node Position
 
