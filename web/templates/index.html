@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Triangulation System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        #map-container {
+            position: relative;
+            background: #f8f9fa;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            height: 600px;
+            overflow: hidden;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        
+        .device {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            transform: translate(-50%, -50%);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .device.wifi {
+            background: #4CAF50;
+        }
+        
+        .device.bluetooth {
+            background: #2196F3;
+        }
+        
+        .device:hover {
+            transform: translate(-50%, -50%) scale(1.3);
+            z-index: 10;
+        }
+        
+        .device-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            pointer-events: none;
+            transform: translate(-50%, -35px);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .device:hover .device-label {
+            opacity: 1;
+        }
+        
+        .uncertainty-area {
+            position: absolute;
+            border: 2px dashed rgba(255, 152, 0, 0.6);
+            background: rgba(255, 152, 0, 0.1);
+            pointer-events: none;
+            border-radius: 4px;
+        }
+        
+        .uncertainty-circle {
+            position: absolute;
+            border: 2px dashed rgba(255, 152, 0, 0.6);
+            background: rgba(255, 152, 0, 0.1);
+            pointer-events: none;
+            border-radius: 50%;
+        }
+        
+        .node {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: #FF5722;
+            border: 3px solid white;
+            border-radius: 4px;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .node-label {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #FF5722;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        .device-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .device-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #4CAF50;
+            transition: all 0.3s;
+        }
+        
+        .device-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+        
+        .device-item.bluetooth {
+            border-left-color: #2196F3;
+        }
+        
+        .device-mac {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .device-info {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .confidence-bar {
+            height: 4px;
+            background: #ddd;
+            border-radius: 2px;
+            margin-top: 6px;
+            overflow: hidden;
+        }
+        
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            transition: width 0.3s;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .status.active {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .status.inactive {
+            background: #f44336;
+            color: white;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+        
+        .legend-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        
+        .legend-icon.wifi {
+            background: #4CAF50;
+        }
+        
+        .legend-icon.bluetooth {
+            background: #2196F3;
+        }
+        
+        .legend-icon.node {
+            background: #FF5722;
+            border-radius: 3px;
+        }
+        
+        .node-list {
+            margin-top: 15px;
+        }
+        
+        .node-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #FF5722;
+            transition: all 0.3s;
+        }
+        
+        .node-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+        
+        .node-item.inactive {
+            opacity: 0.6;
+            border-left-color: #999;
+        }
+        
+        .node-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .node-info {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .node-status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        
+        .node-status-badge.active {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .node-status-badge.inactive {
+            background: #f44336;
+            color: #white;
+        }
+        
+        .sidebar-section {
+            margin-bottom: 10px;
+        }
+        
+        .sidebar-section h3 {
+            font-size: 14px;
+            color: #667eea;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #667eea;
+            font-weight: bold;
+        }
+        
+        .device-name-toggle {
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+        
+        .device-name-toggle:hover {
+            color: #667eea;
+            transform: scale(1.05);
+        }
+        
+        .device-name-toggle:active {
+            transform: scale(0.95);
+        }
+        
+        @media (max-width: 1024px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📍 WiFi/Bluetooth Device Triangulation System</h1>
+            <p class="subtitle">Real-time device tracking using FIND3-inspired fingerprinting technology</p>
+        </header>
+        
+        <div class="dashboard">
+            <div class="main-content">
+                <div class="card">
+                    <h2>Live Map</h2>
+                    <div id="map-container">
+                        <div id="map"></div>
+                    </div>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-icon wifi"></div>
+                            <span>WiFi Device</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-icon bluetooth"></div>
+                            <span>Bluetooth Device</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-icon node"></div>
+                            <span>Scanner Node</span>
+                        </div>
+                        <div class="legend-item">
+                            <div style="width: 20px; height: 12px; border: 2px dashed rgba(255, 152, 0, 0.6); background: rgba(255, 152, 0, 0.1);"></div>
+                            <span>Uncertainty Zone</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <div class="card">
+                    <div class="stats">
+                        <div class="stat-box">
+                            <div class="stat-number" id="device-count">0</div>
+                            <div class="stat-label">Active Devices</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number" id="node-count">0</div>
+                            <div class="stat-label">Scanner Nodes</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>Scanner Nodes</h2>
+                    <div class="sidebar-section">
+                        <h3>Active Nodes</h3>
+                        <div class="node-list" id="node-list">
+                            <p style="text-align: center; color: #999; padding: 20px;">
+                                Waiting for nodes...
+                            </p>
+                        </div>
+                    </div>
+                    <div class="sidebar-section">
+                        <h3>Detected Devices</h3>
+                        <div class="device-list" id="device-list">
+                            <p style="text-align: center; color: #999; padding: 20px;">
+                                Waiting for device data...
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        // Initialize WebSocket connection
+        const socket = io();
+        
+        // Map configuration
+        const MAP_WIDTH = 100;  // meters
+        const MAP_HEIGHT = 100; // meters
+        
+        // Store devices and nodes
+        let devices = {};
+        let nodes = {};
+        let deviceNameStates = {};  // Track whether showing name or MAC for each device
+        
+        // Connect to server
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            loadInitialData();
+        });
+        
+        socket.on('device_update', (data) => {
+            console.log('Device update:', data);
+            updateDevice(data);
+        });
+        
+        // Load initial data
+        async function loadInitialData() {
+            try {
+                // Load devices
+                const devicesResponse = await fetch('/api/devices');
+                const devicesData = await devicesResponse.json();
+                if (devicesData.status === 'success') {
+                    devicesData.devices.forEach(device => {
+                        updateDevice({
+                            mac: device.mac,
+                            name: device.name || 'Unknown',
+                            type: device.type,
+                            position: {
+                                x: device.x,
+                                y: device.y,
+                                z: device.z
+                            },
+                            confidence: device.confidence,
+                            timestamp: device.timestamp,
+                            uncertainty_area: device.uncertainty_area || null
+                        });
+                    });
+                }
+                
+                // Load nodes
+                const nodesResponse = await fetch('/api/nodes');
+                const nodesData = await nodesResponse.json();
+                if (nodesData.status === 'success') {
+                    nodesData.nodes.forEach(node => {
+                        updateNode(node);
+                    });
+                }
+                
+                updateStats();
+            } catch (error) {
+                console.error('Error loading initial data:', error);
+            }
+        }
+        
+        // Update device
+        function updateDevice(data) {
+            devices[data.mac] = {
+                mac: data.mac,
+                name: data.name || 'Unknown',  // AI-generated name
+                type: data.type,
+                position: data.position,
+                confidence: data.confidence,
+                timestamp: data.timestamp,
+                uncertainty_area: data.uncertainty_area || null
+            };
+            
+            // Initialize name state if not exists (default: show name)
+            if (!(data.mac in deviceNameStates)) {
+                deviceNameStates[data.mac] = 'name';
+            }
+            
+            renderDevices();
+            renderDeviceList();
+            updateStats();
+        }
+        
+        // Toggle between device name and MAC address
+        function toggleDeviceName(mac) {
+            if (deviceNameStates[mac] === 'name') {
+                deviceNameStates[mac] = 'mac';
+            } else {
+                deviceNameStates[mac] = 'name';
+            }
+            renderDeviceList();
+        }
+        
+        // Update node
+        function updateNode(node) {
+            nodes[node.node_id] = {
+                id: node.node_id,
+                x: node.x,
+                y: node.y,
+                z: node.z,
+                status: node.status,
+                last_seen: node.last_seen
+            };
+            
+            renderNodes();
+            updateStats();
+        }
+        
+        // Render devices on map
+        function renderDevices() {
+            const map = document.getElementById('map');
+            const mapRect = map.getBoundingClientRect();
+            
+            // Remove old devices and uncertainty areas
+            const oldDevices = map.querySelectorAll('.device');
+            oldDevices.forEach(d => d.remove());
+            const oldAreas = map.querySelectorAll('.uncertainty-area, .uncertainty-circle');
+            oldAreas.forEach(a => a.remove());
+            
+            // Add devices
+            Object.values(devices).forEach(device => {
+                // Draw uncertainty area first (so it's behind the device marker)
+                if (device.uncertainty_area) {
+                    drawUncertaintyArea(device.uncertainty_area, mapRect);
+                }
+                
+                // Draw device marker
+                const x = (device.position.x / MAP_WIDTH) * mapRect.width;
+                const y = (device.position.y / MAP_HEIGHT) * mapRect.height;
+                
+                const deviceEl = document.createElement('div');
+                deviceEl.className = `device ${device.type}`;
+                deviceEl.style.left = `${x}px`;
+                deviceEl.style.top = `${y}px`;
+                
+                const label = document.createElement('div');
+                label.className = 'device-label';
+                const deviceName = devices[device.mac]?.name || 'Unknown';
+                label.textContent = `${deviceName} (${Math.round(device.confidence * 100)}%)`;
+                deviceEl.appendChild(label);
+                
+                map.appendChild(deviceEl);
+            });
+        }
+        
+        // Draw uncertainty area on map
+        function drawUncertaintyArea(area, mapRect) {
+            const map = document.getElementById('map');
+            
+            if (area.type === 'rectangle') {
+                // Draw rectangular uncertainty zone
+                const minX = (area.min_x / MAP_WIDTH) * mapRect.width;
+                const maxX = (area.max_x / MAP_WIDTH) * mapRect.width;
+                const minY = (area.min_y / MAP_HEIGHT) * mapRect.height;
+                const maxY = (area.max_y / MAP_HEIGHT) * mapRect.height;
+                
+                const width = maxX - minX;
+                const height = maxY - minY;
+                
+                const areaEl = document.createElement('div');
+                areaEl.className = 'uncertainty-area';
+                areaEl.style.left = `${minX}px`;
+                areaEl.style.top = `${minY}px`;
+                areaEl.style.width = `${width}px`;
+                areaEl.style.height = `${height}px`;
+                
+                map.appendChild(areaEl);
+                
+            } else if (area.type === 'circle') {
+                // Draw circular uncertainty zone
+                const centerX = (area.center_x / MAP_WIDTH) * mapRect.width;
+                const centerY = (area.center_y / MAP_HEIGHT) * mapRect.height;
+                const radius = (area.radius / MAP_WIDTH) * mapRect.width;
+                
+                const diameter = radius * 2;
+                
+                const circleEl = document.createElement('div');
+                circleEl.className = 'uncertainty-circle';
+                circleEl.style.left = `${centerX - radius}px`;
+                circleEl.style.top = `${centerY - radius}px`;
+                circleEl.style.width = `${diameter}px`;
+                circleEl.style.height = `${diameter}px`;
+                
+                map.appendChild(circleEl);
+            }
+        }
+        
+        // Render nodes on map
+        function renderNodes() {
+            const map = document.getElementById('map');
+            const mapRect = map.getBoundingClientRect();
+            
+            // Remove old nodes
+            const oldNodes = map.querySelectorAll('.node');
+            oldNodes.forEach(n => n.remove());
+            
+            // Add nodes
+            Object.values(nodes).forEach(node => {
+                const x = (node.x / MAP_WIDTH) * mapRect.width;
+                const y = (node.y / MAP_HEIGHT) * mapRect.height;
+                
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'node';
+                nodeEl.style.left = `${x}px`;
+                nodeEl.style.top = `${y}px`;
+                
+                const label = document.createElement('div');
+                label.className = 'node-label';
+                label.textContent = node.id;
+                nodeEl.appendChild(label);
+                
+                map.appendChild(nodeEl);
+            });
+            
+            // Update node list sidebar
+            renderNodeList();
+        }
+        
+        // Render node list in sidebar
+        function renderNodeList() {
+            const list = document.getElementById('node-list');
+            list.innerHTML = '';
+            
+            const nodeArray = Object.values(nodes);
+            if (nodeArray.length === 0) {
+                list.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No nodes connected</p>';
+                return;
+            }
+            
+            // Sort by node_id
+            nodeArray.sort((a, b) => a.id.localeCompare(b.id));
+            
+            nodeArray.forEach(node => {
+                const item = document.createElement('div');
+                const timeSince = Math.round((Date.now() / 1000) - (node.last_seen || 0));
+                const isActive = timeSince < 30; // Active if seen in last 30 seconds
+                
+                item.className = `node-item ${isActive ? 'active' : 'inactive'}`;
+                
+                item.innerHTML = `
+                    <div class="node-name">
+                        ${node.id}
+                        <span class="node-status-badge ${isActive ? 'active' : 'inactive'}">
+                            ${isActive ? 'ACTIVE' : 'OFFLINE'}
+                        </span>
+                    </div>
+                    <div class="node-info">
+                        Position: (${node.x.toFixed(1)}, ${node.y.toFixed(1)}, ${node.z.toFixed(1)})m
+                    </div>
+                    <div class="node-info">
+                        Last seen: ${timeSince}s ago
+                    </div>
+                `;
+                
+                list.appendChild(item);
+            });
+        }
+        
+        // Render device list in sidebar
+        function renderDeviceList() {
+            const list = document.getElementById('device-list');
+            list.innerHTML = '';
+            
+            const deviceArray = Object.values(devices);
+            if (deviceArray.length === 0) {
+                list.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No devices detected</p>';
+                return;
+            }
+            
+            // Sort by timestamp (most recent first)
+            deviceArray.sort((a, b) => b.timestamp - a.timestamp);
+            
+            deviceArray.forEach(device => {
+                const item = document.createElement('div');
+                item.className = `device-item ${device.type}`;
+                
+                const timeSince = Math.round((Date.now() / 1000) - device.timestamp);
+                
+                // Determine what to show: name or MAC
+                const displayText = deviceNameStates[device.mac] === 'name' ? 
+                    device.name : 
+                    device.mac;
+                
+                item.innerHTML = `
+                    <div class="device-mac">
+                        <span class="device-name-toggle" onclick="toggleDeviceName('${device.mac}')" title="Click to toggle">
+                            ${displayText}
+                        </span>
+                    </div>
+                    <div class="device-info">
+                        Type: ${device.type.toUpperCase()} | 
+                        Position: (${device.position.x.toFixed(1)}, ${device.position.y.toFixed(1)})m
+                    </div>
+                    <div class="device-info">
+                        Confidence: ${Math.round(device.confidence * 100)}% | ${timeSince}s ago
+                    </div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: ${device.confidence * 100}%"></div>
+                    </div>
+                `;
+                
+                list.appendChild(item);
+            });
+        }
+        
+        // Update statistics
+        function updateStats() {
+            document.getElementById('device-count').textContent = Object.keys(devices).length;
+            document.getElementById('node-count').textContent = Object.keys(nodes).length;
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            renderDevices();
+            renderNodes();
+        });
+        
+        // Refresh data periodically
+        setInterval(loadInitialData, 5000);
+        
+        // Clean up old devices
+        setInterval(() => {
+            const now = Date.now() / 1000;
+            Object.keys(devices).forEach(mac => {
+                if (now - devices[mac].timestamp > 60) {
+                    delete devices[mac];
+                }
+            });
+            renderDevices();
+            renderDeviceList();
+            updateStats();
+        }, 10000);
+    </script>
+</body>
+</html>
