@@ -46,7 +46,18 @@ fi
 # Install dependencies
 echo "Installing dependencies..."
 source venv/bin/activate
-pip install -q -r requirements.txt
+
+# Upgrade pip first
+pip install --upgrade pip setuptools wheel > /dev/null 2>&1
+
+# Install core dependencies (this should be quick)
+echo "  - Installing core dependencies (Flask, SQLAlchemy, etc.)..."
+pip install -r requirements.txt 2>&1 | grep -v "Requirement already satisfied" | head -20
+
+echo "✓ Core dependencies installed"
+echo ""
+echo "Note: Optional ML features (scikit-learn) can be installed later with:"
+echo "      pip install -r requirements-ml.txt"
 
 echo ""
 echo "=========================================="

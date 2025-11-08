@@ -15,8 +15,6 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
 from scipy.optimize import minimize
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -24,6 +22,16 @@ from sqlalchemy.orm import sessionmaker
 
 from device_names import DeviceNameGenerator
 from node_geometry import NodeGeometry
+
+# Optional ML imports - gracefully degrade if not available
+try:
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.preprocessing import StandardScaler
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.info("scikit-learn not available - using fallback algorithms (this is fine for basic operation)")
 
 # Configure logging
 logging.basicConfig(
@@ -103,7 +111,7 @@ class TriangulationEngine:
     
     def __init__(self):
         self.logger = logging.getLogger(f"{__name__}.TriangulationEngine")
-        self.scaler = StandardScaler()
+        self.scaler = StandardScaler() if SKLEARN_AVAILABLE else None
         self.ml_model = None
         self.fingerprint_db = {}  # For FIND3-style fingerprinting
         self.node_geometry = NodeGeometry()  # Auto-detect node configuration

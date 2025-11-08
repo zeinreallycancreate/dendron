@@ -1,0 +1,5 @@
+# Optional Machine Learning dependencies
+# Only install if you want enhanced ML features (slower install on Raspberry Pi)
+# These are NOT required for basic triangulation functionality
+
+scikit-learn>=1.3.0
